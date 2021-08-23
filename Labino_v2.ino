@@ -15,6 +15,11 @@
 #define LOG_TIME 10*60 * 1000 // milliseconds
 #define LOG_FILE "/log.txt"
 #define DBX_LOG_DESTINATION "/logs/data.log"
+#define CRE_SSID_MAX_SIZE 64
+#define CRE_PASSWORD_MAX_SIZE 64
+
+char ssid[CRE_SSID_MAX_SIZE] = DEFAULT_SSID;
+char password[CRE_PASSWORD_MAX_SIZE] = DEFAULT_PASSWORD;
 
 const uint8_t soilMoisturePins[SOIL_MOISTURE_AMOUNT] = {13, 14, 15};
 
@@ -27,6 +32,7 @@ public:
 
 void sense(TempSensor *tSensor, DHTManager *dhtManager, NTPManager *ntp);
 void log(Dropbox *dbx);
+void changeWiFi(const char *newSsid, const char *newPassword);
 
 MoistSensor moistSensors[SOIL_MOISTURE_AMOUNT];
 
@@ -64,7 +70,7 @@ void setup() {
   }
 
   dht.begin();
-  dropbox.begin(DBX_TOKEN);
+  dropbox.begin(DEFAULT_DBX_TOKEN);
   ntpManager.begin();
 }
 
@@ -109,4 +115,8 @@ void log(Dropbox *dbx) {
   if (success) {
     SPIFFS.remove(LOG_FILE)
   }
+}
+
+void changeWiFi(const char *newSsid, const char *newPassword) {
+    memset(ssid
 }

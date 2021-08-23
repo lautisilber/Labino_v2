@@ -84,6 +84,7 @@ public:
 
     void begin(const char *token);
 
+    void setToken(const char *token);
     void setPath(const char *path);
     bool test();
 
@@ -195,13 +196,17 @@ vEsXCS+0yx5DaMkHJ8HSXPfqIbloEpw8nL+e/IBcm2PN7EeqJSdnoDfzAIJ9VNep
 Dropbox::Dropbox() {
     memset(_url, DBX_URL_MAX_SIZE, '\0');
     memset(_response, DBX_RESPONSE_MAX_SIZE, '\0');
-    memset(_token, DBX_TOKEN_SIZE, '\0');
 }
 
 Dropbox::~Dropbox() {
 }
 
 void Dropbox::begin(const char *token) {
+    setToken(token);
+}
+
+void Dropbox::setToken(const char *token) {
+    memset(_token, DBX_TOKEN_SIZE, '\0');
     strncpy(_token, "Bearer ", 8);
     strncat(_token, token, DBX_TOKEN_SIZE-8);
 }
