@@ -31,7 +31,7 @@ void NTPManager::begin() {
 }
 
 bool NTPManager::getTimeStamp(TimeStamp *timeStamp) {
-    if (!getLocalTime(%_timeInfo)) {
+    if (!getLocalTime(&_timeInfo)) {
         PRINT("Couldn't get ntp time");
         return false;
     }
