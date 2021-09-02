@@ -16,8 +16,8 @@
 
 #define SOIL_MOISTURE_AMOUNT 3
 #define DHT_PIN 27
-#define SENSOR_TIME 15*1000//10 * 1000 // milliseconds
-#define LOG_TIME 60*1000//10*60 * 1000 // milliseconds
+#define SENSOR_TIME 0.25*1000//10 * 1000 // milliseconds
+#define LOG_COUNT_UPDATE 1000 // how many logs can be stored before uploading them
 #define LOG_FILE "/log.txt"
 #define DBX_LOG_DESTINATION "/logs/data.log"
 
@@ -31,8 +31,24 @@ public:
   }
 };
 
-void sense(MoistSensor *mSensor, DHTManager *dhtManager, NTPManager *ntp);
-void log(Dropbox *dbx);
+void readFile(fs::FS &fs, const char * path){
+    Serial.printf("Reading file: %s\r\n", path);
+
+    File file = fs.open(path);
+    if(!file || file.isDirectory()){
+        Serial.println("- failed to open file for reading");
+        return;
+    }
+
+    Serial.println("- read from file:");
+    while(file.available()){
+        Serial.write(file.read());
+    }
+    file.close();
+}
+
+bool sense(MoistSensor *mSensor, DHTManager *dhtManager, NTPManager *ntp);
+bool log(Dropbox *dbx);
 
 MoistSensor moistSensors[SOIL_MOISTURE_AMOUNT];
 
@@ -44,7 +60,7 @@ Dropbox dropbox;
 NTPManager ntpManager;
 
 SoftwareTimer sensTimer(SENSOR_TIME, true);
-SoftwareTimer logTimer(LOG_TIME, true);
+uint32_t storedLogs = 0;
 
 AsyncWebServer server(80);
 
@@ -76,53 +92,59 @@ void setup() {
   ntpManager.begin();
 
   sensTimer.activate();
-  logTimer.activate();
 }
 
 void loop() {
   if (sensTimer.tick()) {
-    sense(moistSensors, &dht, &ntpManager);
+    storedLogs += sense(moistSensors, &dht, &ntpManager);
   }
-  if (logTimer.tick()) {
-    log(&dropbox);
+  if (storedLogs >= LOG_COUNT_UPDATE) {
+    bool uploadSuccess = log(&dropbox);
+    if (uploadSuccess)
+      storedLogs = 0;
   }
 }
 
-void sense(MoistSensor *mSensor, DHTManager *dhtManager, NTPManager *ntp) {
+bool sense(MoistSensor *mSensor, DHTManager *dhtManager, NTPManager *ntp) {
   PRINT("Logging... ");
 
-  TimeStamp timeStamp;
-  ntp->getTimeStamp(&timeStamp);
-  DHTInfo dhtInfo;
-  dhtManager->getInfo(&dhtInfo);
+  const TimeStamp *timeStamp = ntp->getTimeStamp();
+  const DHTData *dhtData = dhtManager->getData();
   StaticJsonDocument<512> json;
-  json["time"] = timeStamp.timeStr;
+  json["time"] = timeStamp->timeStr;
   JsonArray moistArray = json.createNestedArray("soil");
   for (size_t i = 0; i < SOIL_MOISTURE_AMOUNT; i++) {
     moistArray.add(mSensor[i].getVal());
   }
-  json["hum"] = dhtInfo.hum;
-  json["temp"] = dhtInfo.temp;
+  json["hum"] = dhtData->hum;
+  json["temp"] = dhtData->temp;
   char buff[512] = {'\0'};
   serializeJson(json, buff, 512);
   
   File file = SPIFFS.open(LOG_FILE, FILE_APPEND);
   if(!file){
       PRINT("failed to open file for logging");
-      return;
+      return false;
   }
+
+  bool success;
   if(!file.println(buff)){
     PRINT("Failed to save sensor values\n");
+    success = false;
   } else {
     PRINT("done\n");
+    success = true;
   }
   file.close();
+  return success;
 }
 
-void log(Dropbox *dbx) {
+bool log(Dropbox *dbx) {
+  readFile(SPIFFS, LOG_FILE);
   bool success = dbx->uploadFile(SPIFFS, LOG_FILE, false, DBX_LOG_DESTINATION);
   if (success) {
     SPIFFS.remove(LOG_FILE);
   }
-  PRINT("uploading file: %s", (success ? "success" : "error"));
+  PRINT("uploading file: %s\n", (success ? "success" : "error"));
+  return success;
 }

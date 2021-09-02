@@ -5,26 +5,25 @@
 #include "softwareTimer.hpp"
 
 #ifdef DEBUG
-#define PRINT(...) Serial.printf(__VA_ARGS__)
+    #define PRINT(...) Serial.printf(__VA_ARGS__)
 #else
-#define PRINT(...)
+    #define PRINT(...)
 #endif
 
 //#define ABS(X) ((X) > 0 ? (X) : -(X))
 #define DHT_MIN_REFRESH_TIME 2100 // in milliseconds
 
 
-struct DHTInfo {
-    float hum;
-    float temp;
+struct DHTData {
+    float hum = -127;
+    float temp = -127;
 };
 
 
 class DHTManager {
 private:
     DHT *_dht;
-    float _hum = -127;
-    float _temp = -127;
+    DHTData _data;
     SoftwareTimer _timer;
 public:
     DHTManager(DHT *dht) {
@@ -43,14 +42,15 @@ public:
             float hum = _dht->readHumidity();
             float temp = _dht->readTemperature();
             if (isnan(hum)) { PRINT("Couldn't read dht humidity"); }
-            else { _hum = hum; }
+            else { _data.hum = hum; }
             if (isnan(temp)) { PRINT("Couldn't read dht temperature"); }
-            else { _temp = temp; }
+            else { _data.temp = temp; }
         }
     }
 
-    float getInfo(DHTInfo *dhtInfo) {
-        dhtInfo->hum = _hum;
-        dhtInfo->temp = _temp;
+    const DHTData* getData(bool update=true) {
+        if (update)
+            read();
+        return (const DHTData *) &_data;
     }
 };

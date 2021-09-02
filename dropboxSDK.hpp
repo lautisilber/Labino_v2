@@ -2,9 +2,9 @@
 
 
 #ifdef DEBUG
-#define PRINT(...) Serial.printf(__VA_ARGS__)
+    #define PRINT(...) Serial.printf(__VA_ARGS__)
 #else
-#define PRINT(...)
+    #define PRINT(...)
 #endif
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
@@ -310,10 +310,22 @@ void Dropbox::setURL(const char *relativeURL) {
 }
 
 bool Dropbox::test() {
-    setURL("/");
-    
     PRINT("Testing connection... ");
-    bool success = get();
+    
+    HTTPClient http;
+    http.begin("https://www.dropbox.com", Dropbox::root_ca);
+    
+    _statusCode = http.GET();
+
+    if (_statusCode > 0) {
+        http.getString().toCharArray(_response, DBX_RESPONSE_MAX_SIZE);
+    } else {
+        strncpy(_response, DBX_ERROR_DEFAULT_RESPONSE, DBX_RESPONSE_MAX_SIZE);
+    }
+    http.end();
+
+    bool success = _statusCode >= 200 && _statusCode < 300;
+    
     PRINT("%s\n", (success ? "success" : "error"));
     #ifdef DEBUG
     if (!success) {
@@ -397,86 +409,87 @@ bool Dropbox::uploadFile(fs::FS &fs, const char *localPath, bool overwrite, cons
         PRINT("failed to read file '%s' for dbx uploading\n", localPath);
         return false;
     }
-    size_t fileSize = file.size();
-    size_t buffLen;
-    bool success;
 
-    if (fileSize <= HTTPS_MAX_BATCH_SIZE) { // size is small enough to send in single batch
-        file.read((uint8_t *)buff, fileSize);
-        buff[HTTPS_MAX_BATCH_SIZE] = '\0';
-        buffLen = strlen(buff);
-        uploadString(buff, buffLen, overwrite);
-        success = _statusCode >= 200 && _statusCode < 300;
-        if (!success) {
-            PRINT("Couldn't upload file '%s' in single batch\nstatus code: %i\nresponse: '%s'\nfile size: %u\n", localPath, _statusCode, _response, fileSize);
+    size_t offset = 0;
+    size_t batchOffset = 0;
+    size_t currBatch = 0;
+    bool finish = false;
+    bool success = false;
+    char dbxArguments[256] = {'\0'};
+    char sessionID[32] = {'\0'};
+
+    while (!finish) {
+        memset(buff, '\0', HTTPS_MAX_BATCH_SIZE+1);
+        while (batchOffset < HTTPS_MAX_BATCH_SIZE && file.available()) {
+            buff[batchOffset++] = (char)file.read();
         }
-    } else { // file will be sent is smaller batches
-        size_t batches = ceil(fileSize / HTTPS_MAX_BATCH_SIZE);
-        size_t offset = 0;
-        char dbxArguments[256] = {'\0'};
-        // start
-        PRINT("starting (1/%u)... ", batches);
-        setURL("/files/upload_session/start");
-        deactivateHeader();
-        setHeader("Authorization", _token, 0);
-        setHeader("Content-Type", "text/plain; charset=dropbox-cors-hack", 1);
-        setHeader("Dropbox-API-Arg", "{\"close\": false}", 2);
-        file.read((uint8_t *)buff, HTTPS_MAX_BATCH_SIZE);
+        Serial.println(buff);
         buff[HTTPS_MAX_BATCH_SIZE] = '\0';
-        buffLen = strlen(buff);
-        success = post((uint8_t *)buff, buffLen);
-        if (!success) {
-            PRINT("Couldn't send file '%s' in batches. failed in first batch\n", localPath);
-            return false;
-        }
-        offset += buffLen;
-        StaticJsonDocument<256> json;
-        DeserializationError err = deserializeJson(json, _response);
-        if (err) { PRINT("Couldn't deserialize response json of first batched upload. Tried to deserialize '%s'\n", _response); return false; }
-        if (!json.containsKey("session_id")) { PRINT("Received JSON doesn't contain key 'session_id'. Received '%s'\n", _response); return false; }
-        char sessionID[32] = {'\0'}; strncpy(sessionID, json["session_id"].as<const char*>(), 32);
-        PRINT("done\n");
-        // append
-        setURL("/files/upload_session/append_v2");
-        for (size_t i = 1; i < batches-1; i++) {
-            PRINT("appending (%u/%u)... ", i+1, batches);
-            memset(dbxArguments, 256, '\0');
-            snprintf(dbxArguments, 256, "{\"cursor\":{\"session_id\":\"%s\",\"offset\":%u},\"close\":false}", sessionID, offset);
-            setHeader("Dropbox-API-Arg", dbxArguments, 2);
-            memset(buff, HTTPS_MAX_BATCH_SIZE+1, '\0');
-            file.read((uint8_t *)buff, MIN(HTTPS_MAX_BATCH_SIZE, fileSize-offset));
-            buff[HTTPS_MAX_BATCH_SIZE] = '\0';
-            buffLen = strlen(buff);
-            success = post((uint8_t *)buff, buffLen);
-            if (!success) {
-                PRINT("Error appending to session of id %s and offset of %u\nTried to upload '%s'\nResponse: '%s'", sessionID, offset, (char *)buff, _response);
-                return false;
+        batchOffset = 0;
+        currBatch++;
+        
+        if (currBatch == 1) {
+            if (strlen(buff) < HTTPS_MAX_BATCH_SIZE || !file.available()) {
+                // finished on first batch
+                PRINT("one batch\n");
+                success = uploadString(buff, strlen(buff));
+                finish = true;
+            } else {
+                PRINT("starting...");
+                setURL("/files/upload_session/start");
+                deactivateHeader();
+                setHeader("Authorization", _token, 0);
+                setHeader("Content-Type", "text/plain; charset=dropbox-cors-hack", 1);
+                setHeader("Dropbox-API-Arg", "{\"close\": false}", 2);
+                success = post((uint8_t *)buff, strlen(buff));
+                if (!success) {
+                    PRINT("Couldn't send file '%s' in batches. failed in first batch\n", localPath);
+                    return false;
+                }
+                StaticJsonDocument<256> json;
+                DeserializationError err = deserializeJson(json, _response);
+                if (err) { PRINT("Couldn't deserialize response json of first batched upload. Tried to deserialize '%s'\n", _response); return false; }
+                if (!json.containsKey("session_id")) { PRINT("Received JSON doesn't contain key 'session_id'. Received '%s'\n", _response); return false; }
+                strncpy(sessionID, json["session_id"].as<const char*>(), 32);
+                PRINT("done\n");
             }
-            offset += buffLen;
-            PRINT("done\n");
+        } else {
+            if (!(offset < HTTPS_MAX_BATCH_SIZE || !file.available())) {
+                // didn't finish - append
+                PRINT("offset: %u\n", offset);
+                PRINT("apending...");
+                setURL("/files/upload_session/append_v2");
+                memset(dbxArguments, '\0', 256);
+                snprintf(dbxArguments, 256, "{\"cursor\":{\"session_id\":\"%s\",\"offset\":%u},\"close\":false}", sessionID, offset);
+                setHeader("Dropbox-API-Arg", dbxArguments, 2);
+                success = post((uint8_t *)buff, strlen(buff));
+                if (!success) {
+                    PRINT("Error appending to session of id %s and offset of %u\nTried to upload '%s'\nResponse: '%s'", sessionID, offset, (char *)buff, _response);
+                    return false;
+                }
+                PRINT("done\n");
+            } else {
+                // finished
+                PRINT("offset: %u\n", offset);
+                PRINT("finishing...");
+                setURL("/files/upload_session/finish");
+                memset(dbxArguments, '\0', 256);
+                deactivateHeader();
+                setHeader("Authorization", _token, 0);
+                setHeader("Content-Type", "text/plain; charset=dropbox-cors-hack", 1);
+                snprintf(dbxArguments, 256, "{\"cursor\":{\"session_id\":\"%s\",\"offset\":%u},\"commit\":{\"path\":\"%s\",\"mode\":\"%s\",\"autorename\":true,\"mute\":false,\"strict_conflict\":false}}", sessionID, offset, _path, (overwrite ? "overwrite" : "add"));
+                setHeader("Dropbox-API-Arg", dbxArguments, 2);
+                success = post((uint8_t *)buff, strlen(buff));
+                if (!success) {
+                    PRINT("Error appending to session of id %s and offset of %u\nTried to upload '%s'\nResponse: '%s'", sessionID, offset, (char *)buff, _response);
+                    return false;
+                }
+                PRINT("done\n");
+                finish = true;
+            }
         }
-        // finish
-        PRINT("Finishing (%u/%u)... ", batches, batches);
-        setURL("/files/upload_session/finish");
-        memset(dbxArguments, 256, '\0');
-        deactivateHeader();
-        setHeader("Authorization", _token, 0);
-        setHeader("Content-Type", "text/plain; charset=dropbox-cors-hack", 1);
-        snprintf(dbxArguments, 256, "{\"cursor\":{\"session_id\":\"%s\",\"offset\":%u},\"commit\":{\"path\":\"%s\",\"mode\":\"%s\",\"autorename\":true,\"mute\":false,\"strict_conflict\":false}}", sessionID, offset, _path, (overwrite ? "overwrite" : "add"));
-        setHeader("Dropbox-API-Arg", dbxArguments, 2);
-        //setHeader("Dropbox-API-Arg", (String("{\"cursor\": {\"session_id\": \"") + String(sessionID) + String("\",\"offset\": ") + String(26/*len*/) + String("},\"commit\": {\"path\": \"/Homework/math/Matrices.txt\",\"mode\": \"add\",\"autorename\": true,\"mute\": false,\"strict_conflict\": false}}")).c_str(), 2);
-        memset(buff, HTTPS_MAX_BATCH_SIZE+1, '\0');
-        file.read((uint8_t *)buff, MIN(HTTPS_MAX_BATCH_SIZE, fileSize-offset));
-        buff[HTTPS_MAX_BATCH_SIZE] = '\0';
-        buffLen = strlen(buff);
-        success = post((uint8_t *)buff, buffLen);
-        if (!success) {
-            PRINT("Error finishing session of id %s and offset of %u\nTried to upload: '%s'\nResponse: '%s'\nfile size: %u, offset: %u, buff len: %u\n", sessionID, offset, (char *)buff, _response, fileSize, offset, buffLen);
-            return false;
-        }
-        PRINT("done\n");
+        offset += strlen(buff);
     }
-
     return success;
 }
 
