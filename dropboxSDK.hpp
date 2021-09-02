@@ -88,11 +88,11 @@ public:
     void setPath(const char *path);
     bool test();
 
-    bool uploadString(char *content, size_t size, const char *path=nullptr);
+    bool uploadString(char *content, size_t size, bool overwrite=false, const char *path=nullptr);
     char* downloadString(char *path=nullptr);
 
-    bool uploadFile(fs::FS &fs, const char *localPath, const char *remotePath=nullptr);
-    bool uploadFileSingleBatch(fs::FS &fs, const char *localPath, const char *remotePath=nullptr);
+    bool uploadFile(fs::FS &fs, const char *localPath, bool overwrite=false, const char *remotePath=nullptr);
+    bool uploadFileSingleBatch(fs::FS &fs, const char *localPath, bool overwrite=false, const char *remotePath=nullptr);
     //bool uploadFileStream(fs::FS &fs, const char *localPath, const char *remotePath=nullptr);
 
 private:
@@ -323,13 +323,13 @@ bool Dropbox::test() {
     return success;
 }
 
-bool Dropbox::uploadString(char *content, size_t size, const char *path) {
+bool Dropbox::uploadString(char *content, size_t size, bool overwrite, const char *path) {
     setURL("/files/upload");
     if (path != nullptr)
         setPath(path);
   
     char dbxArguments[192] = {'\0'};
-    snprintf(dbxArguments, 192, "{\"path\":\"%s\",\"mode\":\"overwrite\",\"autorename\":true,\"mute\":false,\"strict_conflict\":false}", _path);
+    snprintf(dbxArguments, 192, "{\"path\":\"%s\",\"mode\":\"%s\",\"autorename\":true,\"mute\":false,\"strict_conflict\":false}", _path, (overwrite ? "overwrite" : "add"));
 
     deactivateHeader();
     setHeader("Authorization", _token, 0);
@@ -356,13 +356,11 @@ char* Dropbox::downloadString(char *path) {
     return (success ? _response : nullptr);
 }
 
-bool Dropbox::uploadFileSingleBatch(fs::FS &fs, const char *localPath, const char *remotePath) {
+bool Dropbox::uploadFileSingleBatch(fs::FS &fs, const char *localPath, bool overwrite, const char *remotePath) {
     if ((WiFi.status() != WL_CONNECTED)) {
         PRINT("Not connected to WiFi\n");
         return false;
     }
-    if (remotePath != nullptr)
-        setPath(remotePath);
 
     char buff[MAX_FILE_BUFF+1] = {'\0'};
     File file = fs.open(localPath);
@@ -381,11 +379,11 @@ bool Dropbox::uploadFileSingleBatch(fs::FS &fs, const char *localPath, const cha
     }
     buff[MAX_FILE_BUFF] = '\0';
 
-    bool success = uploadString(buff, strlen(buff));
+    bool success = uploadString(buff, strlen(buff), overwrite, remotePath);
     return success;
 }
 
-bool Dropbox::uploadFile(fs::FS &fs, const char *localPath, const char *remotePath) {
+bool Dropbox::uploadFile(fs::FS &fs, const char *localPath, bool overwrite, const char *remotePath) {
     if ((WiFi.status() != WL_CONNECTED)) {
         PRINT("Not connected to WiFi\n");
         return false;
@@ -407,7 +405,7 @@ bool Dropbox::uploadFile(fs::FS &fs, const char *localPath, const char *remotePa
         file.read((uint8_t *)buff, fileSize);
         buff[HTTPS_MAX_BATCH_SIZE] = '\0';
         buffLen = strlen(buff);
-        uploadString(buff, buffLen);
+        uploadString(buff, buffLen, overwrite);
         success = _statusCode >= 200 && _statusCode < 300;
         if (!success) {
             PRINT("Couldn't upload file '%s' in single batch\nstatus code: %i\nresponse: '%s'\nfile size: %u\n", localPath, _statusCode, _response, fileSize);
@@ -464,7 +462,7 @@ bool Dropbox::uploadFile(fs::FS &fs, const char *localPath, const char *remotePa
         deactivateHeader();
         setHeader("Authorization", _token, 0);
         setHeader("Content-Type", "text/plain; charset=dropbox-cors-hack", 1);
-        snprintf(dbxArguments, 256, "{\"cursor\":{\"session_id\":\"%s\",\"offset\":%u},\"commit\":{\"path\":\"%s\",\"mode\":\"overwrite\",\"autorename\":true,\"mute\":false,\"strict_conflict\":false}}", sessionID, offset, _path);
+        snprintf(dbxArguments, 256, "{\"cursor\":{\"session_id\":\"%s\",\"offset\":%u},\"commit\":{\"path\":\"%s\",\"mode\":\"%s\",\"autorename\":true,\"mute\":false,\"strict_conflict\":false}}", sessionID, offset, _path, (overwrite ? "overwrite" : "add"));
         setHeader("Dropbox-API-Arg", dbxArguments, 2);
         //setHeader("Dropbox-API-Arg", (String("{\"cursor\": {\"session_id\": \"") + String(sessionID) + String("\",\"offset\": ") + String(26/*len*/) + String("},\"commit\": {\"path\": \"/Homework/math/Matrices.txt\",\"mode\": \"add\",\"autorename\": true,\"mute\": false,\"strict_conflict\": false}}")).c_str(), 2);
         memset(buff, HTTPS_MAX_BATCH_SIZE+1, '\0');

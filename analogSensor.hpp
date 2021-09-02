@@ -8,15 +8,16 @@ private:
     uint8_t _pin;
     float _val;
 public:
-    AnalogSensor();
-    AnalogSensor(uint8_t pin) { _pin = pin; }
-
-    virtual float calibration(uint16_t rawVal) = 0;
+    float calibration(uint16_t rawVal);
 
     void setPin(uint8_t pin) { _pin = pin; }
     void read();
     float getVal(bool update=true);
 };
+
+float AnalogSensor::calibration(uint16_t rawVal) {
+    return (rawVal*100) / 1024;
+}
 
 void AnalogSensor::read() {
     _val = calibration(analogRead(_pin));

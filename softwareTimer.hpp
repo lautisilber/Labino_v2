@@ -2,7 +2,6 @@
 
 #include <Arduino.h>
 
-#define S_to_mS_FACTOR 1000
 #define MAX_UINT32 (uint32_t)-1
 
 class SoftwareTimer
@@ -15,23 +14,23 @@ private:
 
 public:
     SoftwareTimer() {};
-    SoftwareTimer(uint16_t time, bool reload);
+    SoftwareTimer(uint32_t time, bool reload);
     
-    void writeTimer(uint16_t time, bool reload);
+    void writeTimer(uint32_t time, bool reload);
     void activate(bool state=true);
     void restart();
     bool tick();
 
-    uint16_t getCurrMaxTime() const { return (int)(maxTime / S_to_mS_FACTOR); }
+    uint32_t getCurrMaxTime() const { return maxTime; }
 };
 
-SoftwareTimer::SoftwareTimer(uint16_t time /* in seconds */, bool reload) {
+SoftwareTimer::SoftwareTimer(uint32_t time /* in milliseconds */, bool reload) {
     writeTimer(time, reload);
     lastTime = millis();
 }
 
-void SoftwareTimer::writeTimer(uint16_t time /* in seconds */, bool reload) {
-    maxTime = time * S_to_mS_FACTOR;
+void SoftwareTimer::writeTimer(uint32_t time /* in milliseconds */, bool reload) {
+    maxTime = time;
     autoReboot = reload;
 }
 

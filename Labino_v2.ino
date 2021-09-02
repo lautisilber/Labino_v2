@@ -5,22 +5,24 @@
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 
-//#include "credentials.hpp"
-//#include "analogSensor.hpp"
-//#include "dhtManager.hpp"
-//#include "dropboxSDK.hpp"
-//#include "NTPManager.hpp"
-//#include "internetManager.hpp"
+#define DEBUG
+
+#include "credentials.hpp"
+#include "debug_utils.hpp"
+#include "analogSensor.hpp"
+#include "dhtManager.hpp"
+#include "dropboxSDK.hpp"
+#include "NTPManager.hpp"
 
 #define SOIL_MOISTURE_AMOUNT 3
-#define DHT_PIN 5
-#define SENSOR_TIME 10 * 1000 // milliseconds
-#define LOG_TIME 10*60 * 1000 // milliseconds
+#define DHT_PIN 27
+#define SENSOR_TIME 15*1000//10 * 1000 // milliseconds
+#define LOG_TIME 60*1000//10*60 * 1000 // milliseconds
 #define LOG_FILE "/log.txt"
 #define DBX_LOG_DESTINATION "/logs/data.log"
 
-/*
-const uint8_t soilMoisturePins[SOIL_MOISTURE_AMOUNT] = {13, 14, 15};
+
+const uint8_t soilMoisturePins[SOIL_MOISTURE_AMOUNT] = {34, 34, 34};
 
 class MoistSensor : public AnalogSensor {
 public:
@@ -41,11 +43,10 @@ Dropbox dropbox;
 
 NTPManager ntpManager;
 
-SoftwareTimer sensTimer;
-SoftwareTimer logTimer;
+SoftwareTimer sensTimer(SENSOR_TIME, true);
+SoftwareTimer logTimer(LOG_TIME, true);
 
 AsyncWebServer server(80);
-InternetManager internetMan(&server);
 
 void setup() {
   #ifdef DEBUG
@@ -58,20 +59,33 @@ void setup() {
     ESP.restart();
   }
 
-  
+  PRINT("Connecting to %s", ssid);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    PRINT(".");
+  }
+  PRINT("done\nIP address: %s\n", WiFi.localIP().toString().c_str());
 
   for (size_t i = 0; i < SOIL_MOISTURE_AMOUNT; i++) {
     moistSensors[i].setPin(soilMoisturePins[i]);
   }
 
   dht.begin();
-  dropbox.begin(DEFAULT_DBX_TOKEN);
+  dropbox.begin(dropbox_token);
   ntpManager.begin();
+
+  sensTimer.activate();
+  logTimer.activate();
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-
+  if (sensTimer.tick()) {
+    sense(moistSensors, &dht, &ntpManager);
+  }
+  if (logTimer.tick()) {
+    log(&dropbox);
+  }
 }
 
 void sense(MoistSensor *mSensor, DHTManager *dhtManager, NTPManager *ntp) {
@@ -106,15 +120,9 @@ void sense(MoistSensor *mSensor, DHTManager *dhtManager, NTPManager *ntp) {
 }
 
 void log(Dropbox *dbx) {
-  bool success = dbx->uploadFile(SPIFFS, LOG_FILE, DBX_LOG_DESTINATION);
+  bool success = dbx->uploadFile(SPIFFS, LOG_FILE, false, DBX_LOG_DESTINATION);
   if (success) {
     SPIFFS.remove(LOG_FILE);
   }
-}*/
-
-void setup() {
-  
-}
-void loop() {
-  
+  PRINT("uploading file: %s", (success ? "success" : "error"));
 }

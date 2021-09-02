@@ -4,7 +4,7 @@
 #include <time.h>
 
 #define NTP_SERVER_URL "pool.ntp.org"
-#define NTP_GMT_OFFSET_SEC -3600
+#define NTP_GMT_OFFSET_SEC -3600*3
 #define NTP_DAYLIGHT_OFFSET_SEC 0
 
 struct TimeStamp
