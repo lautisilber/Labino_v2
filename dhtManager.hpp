@@ -41,9 +41,9 @@ public:
         if (_timer.tick()) {
             float hum = _dht->readHumidity();
             float temp = _dht->readTemperature();
-            if (isnan(hum)) { PRINT("Couldn't read dht humidity"); }
+            if (isnan(hum)) { PRINT("Couldn't read dht humidity "); }
             else { _data.hum = hum; }
-            if (isnan(temp)) { PRINT("Couldn't read dht temperature"); }
+            if (isnan(temp)) { PRINT("Couldn't read dht temperature "); }
             else { _data.temp = temp; }
         }
     }

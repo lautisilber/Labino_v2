@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Labino</title>
+    <style>
+        body {font-family: 'Gill Sans', Calibri, sans-serif; }
+        .main { margin-left: 1rem; }
+        .container { margin-left: 2rem; }
+        button { 
+            margin: .25rem 0;
+            border-radius: 2px;
+            border: 1px solid #6e6e6e;
+            padding: .2rem .5rem;
+            transition-duration: 0.2s;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline;
+        }
+        button:hover {
+            filter: brightness(88%);
+        }
+        button:active {
+            filter: brightness(75%);
+        }
+        .action { background-color: cadetblue; color: white; }
+        .delete { background-color: firebrick; color: white; }
+    </style>
+    <script>
+        function hyperlink(url) {
+            window.location.href = url;
+        }
+    </script>
+</head>
+<body>
+    <div class="main">
+        <h1>Home</h1>
+        <ul>
+            <li><button onclick="hyperlink('/download')">Download log</button></li>
+            <li><button onclick="hyperlink('/settings')">Settings</button></li>
+        </ul>
+    </div>
+</body>
+</html>
