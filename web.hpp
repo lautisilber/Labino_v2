@@ -191,3 +191,33 @@ const char *settings_html PROGMEM = R"rawliteral(<!DOCTYPE html>
     </div>
 </body>
 </html>)rawliteral";
+
+const char *style_css PROGMEM = R"rawliteral(body {font-family: 'Gill Sans', Calibri, sans-serif; }
+.main { margin-left: 1rem; }
+.container { margin-left: 2rem; }
+.btn { 
+    margin: .25rem 0;
+    border-radius: 2px;
+    border: 1px solid #6e6e6e;
+    padding: .2rem .5rem;
+    transition-duration: 0.2s;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline;
+}
+.btn:hover {
+    filter: brightness(88%);
+}
+.btn:active {
+    filter: brightness(75%);
+}
+.action { background-color: cadetblue; color: white; }
+.delete { background-color: firebrick; color: white; }
+.submit { margin: 1rem 0 }
+.back { font-size: .7rem; }
+form {
+    border: 1px solid #6e6e6e;
+    border-radius: 3px;
+    padding: .5rem 1rem;
+    margin-right: 10%;
+})rawliteral";

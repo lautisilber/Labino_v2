@@ -119,6 +119,7 @@ void setup() {
   server.on("/index", HTTP_GET, [](AsyncWebServerRequest *request){ request->send_P(200, "text/html", index_html); });
   server.on("/download", HTTP_GET, [](AsyncWebServerRequest *request){ request->send_P(200, "text/html", download_html); });
   server.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request){ request->send_P(200, "text/html", settings_html); });
+  server.on("/style.css", HTTP_GET, [](AsyncWebServerRequest *request){ request->send_P(200, "text/css", style_css); });
   server.on("/setsettings", HTTP_GET, [dbxUpload](AsyncWebServerRequest *request){
     int paramsNr = request->params();
     for(int i=0;i<paramsNr;i++){
